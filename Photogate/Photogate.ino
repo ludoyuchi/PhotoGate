@@ -1,4 +1,5 @@
 #include <ArduinoBLE.h>
+#include <SD.h>
 
 const int photogatePin = 2;  // Pino digital conectado ao photogate
 unsigned long startTime = 0;
@@ -8,6 +9,8 @@ bool beamInterrupted = false;
 BLEService photogateService("19b10000-e8f2-537e-4f6c-d104768a1214"); // UUID do serviço
 BLEUnsignedLongCharacteristic startTimeCharacteristic("19b10001-e8f2-537e-4f6c-d104768a1214", BLERead | BLENotify); // UUID da característica de tempo de início
 BLEUnsignedLongCharacteristic interruptionTimeCharacteristic("19b10002-e8f2-537e-4f6c-d104768a1214", BLERead | BLENotify); // UUID da característica de tempo de interrupção
+
+File dataFile;
 
 void setup() {
   pinMode(photogatePin, INPUT);
@@ -32,6 +35,20 @@ void setup() {
   BLE.advertise();
   
   Serial.println("Aguardando conexão Bluetooth...");
+
+  // Inicializa a comunicação com o cartão SD
+  if (!SD.begin()) {
+    Serial.println("Falha ao inicializar o cartão SD");
+    while (1);
+  }
+  
+  // Abre o arquivo para escrita
+  dataFile = SD.open("dados.txt", FILE_WRITE);
+  
+  if (!dataFile) {
+    Serial.println("Falha ao abrir o arquivo");
+    while (1);
+  }
 }
 
 void loop() {
@@ -57,12 +74,17 @@ void loop() {
         Serial.print("Feixe restaurado. Tempo de interrupção: ");
         Serial.println(interruptionTime);
         interruptionTimeCharacteristic.writeValue(interruptionTime);
+        
+        // Grava os dados no cartão microSD
+        dataFile.println("Feixe interrompido. Tempo de início: " + String(startTime));
+        dataFile.println("Feixe restaurado. Tempo de interrupção: " + String(interruptionTime));
       }
     }
     
     Serial.print("Desconectado de: ");
     Serial.println(central.address());
   }
+  
+  // Fecha o arquivo para liberar recursos
+  dataFile.close();
 }
-
-
