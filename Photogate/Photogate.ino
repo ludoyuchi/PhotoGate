@@ -1,90 +1,93 @@
 #include <ArduinoBLE.h>
 #include <SD.h>
 
-const int photogatePin = 2;  // Pino digital conectado ao photogate
+const int photogatePin = 2;
 unsigned long startTime = 0;
 unsigned long endTime = 0;
 bool beamInterrupted = false;
 
-BLEService photogateService("19b10000-e8f2-537e-4f6c-d104768a1214"); // UUID do serviço
-BLEUnsignedLongCharacteristic startTimeCharacteristic("19b10001-e8f2-537e-4f6c-d104768a1214", BLERead | BLENotify); // UUID da característica de tempo de início
-BLEUnsignedLongCharacteristic interruptionTimeCharacteristic("19b10002-e8f2-537e-4f6c-d104768a1214", BLERead | BLENotify); // UUID da característica de tempo de interrupção
+BLEService photogateService("19b10000-e8f2-537e-4f6c-d104768a1214");
+BLEUnsignedLongCharacteristic startTimeCharacteristic("19b10001-e8f2-537e-4f6c-d104768a1214", BLERead | BLENotify);
+BLEUnsignedLongCharacteristic interruptionTimeCharacteristic("19b10002-e8f2-537e-4f6c-d104768a1214", BLERead | BLENotify);
 
 File dataFile;
+String dataString = "";
 
 void setup() {
   pinMode(photogatePin, INPUT);
-  Serial.begin(9600);  // Inicia a comunicação serial
-  
-  // Inicializa a conexão Bluetooth
+  Serial.begin(9600);
+
   if (!BLE.begin()) {
-    Serial.println("Falha ao inicializar o Bluetooth");
+    Serial.println("Failed to initialize Bluetooth");
     while (1);
   }
-  
-  // Define o serviço e as características BLE
+
   BLE.setLocalName("Photogate");
   BLE.setAdvertisedService(photogateService);
   photogateService.addCharacteristic(startTimeCharacteristic);
   photogateService.addCharacteristic(interruptionTimeCharacteristic);
   BLE.addService(photogateService);
-  
-  // Inicia a transmissão Bluetooth
+
   startTimeCharacteristic.writeValue(startTime);
   interruptionTimeCharacteristic.writeValue(0);
   BLE.advertise();
-  
-  Serial.println("Aguardando conexão Bluetooth...");
 
-  // Inicializa a comunicação com o cartão SD
+  Serial.println("Waiting for Bluetooth connection...");
+
   if (!SD.begin()) {
-    Serial.println("Falha ao inicializar o cartão SD");
+    Serial.println("Failed to initialize SD card");
     while (1);
   }
-  
-  // Abre o arquivo para escrita
+
   dataFile = SD.open("dados.txt", FILE_WRITE);
-  
+
   if (!dataFile) {
-    Serial.println("Falha ao abrir o arquivo");
+    Serial.println("Failed to open file");
     while (1);
   }
 }
 
 void loop() {
   BLEDevice central = BLE.central();
-  
+
   if (central) {
-    Serial.print("Conectado a: ");
+    Serial.print("Connected to: ");
     Serial.println(central.address());
-    
+
     while (central.connected()) {
       if (digitalRead(photogatePin) == HIGH && !beamInterrupted) {
         beamInterrupted = true;
         startTime = micros();
-        Serial.print("Feixe interrompido. Tempo de início: ");
+        Serial.print("Beam interrupted. Start time: ");
         Serial.println(startTime);
         startTimeCharacteristic.writeValue(startTime);
+
+        // Send start time via serial
+        Serial.println(startTime);
+
+        dataString = String(startTime) + ",";
       }
-  
+
       if (digitalRead(photogatePin) == LOW && beamInterrupted) {
         beamInterrupted = false;
         endTime = micros();
         unsigned long interruptionTime = endTime - startTime;
-        Serial.print("Feixe restaurado. Tempo de interrupção: ");
+        Serial.print("Beam restored. Interruption time: ");
         Serial.println(interruptionTime);
         interruptionTimeCharacteristic.writeValue(interruptionTime);
-        
-        // Grava os dados no cartão microSD
-        dataFile.println("Feixe interrompido. Tempo de início: " + String(startTime));
-        dataFile.println("Feixe restaurado. Tempo de interrupção: " + String(interruptionTime));
+
+        // Send interruption time via serial
+        Serial.println(interruptionTime);
+
+        dataString += String(interruptionTime) + ",";
+        dataFile.println(dataString);
+        dataString = "";
       }
     }
-    
-    Serial.print("Desconectado de: ");
+
+    Serial.print("Disconnected from: ");
     Serial.println(central.address());
   }
-  
-  // Fecha o arquivo para liberar recursos
+
   dataFile.close();
 }
