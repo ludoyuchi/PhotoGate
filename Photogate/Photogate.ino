@@ -5,6 +5,7 @@ const int photogatePin = 2;
 unsigned long startTime = 0;
 unsigned long endTime = 0;
 bool beamInterrupted = false;
+int voltas = 0;
 
 BLEService photogateService("19b10000-e8f2-537e-4f6c-d104768a1214");
 BLEUnsignedLongCharacteristic startTimeCharacteristic("19b10001-e8f2-537e-4f6c-d104768a1214", BLERead | BLENotify);
@@ -79,9 +80,27 @@ void loop() {
         // Send interruption time via serial
         Serial.println(interruptionTime);
 
-        dataString += String(interruptionTime) + ",";
+        unsigned long tempoVolta = endTime - startTime;
+        unsigned long tempoInterrupcao = interruptionTime;
+
+        // Send current lap and times via serial
+        Serial.print("Volta: ");
+        Serial.println(voltas);
+        Serial.print("Tempo de volta: ");
+        Serial.println(tempoVolta);
+        Serial.print("Tempo de interrupção: ");
+        Serial.println(tempoInterrupcao);
+
+        dataString += String(tempoVolta) + "," + String(tempoInterrupcao) + ",";
         dataFile.println(dataString);
         dataString = "";
+
+        // Reset voltas and times for the next lap
+        voltas++;
+        startTime = 0;
+        endTime = 0;
+        tempoVolta = 0;
+        tempoInterrupcao = 0;
       }
     }
 
